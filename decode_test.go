@@ -2,6 +2,7 @@ package toml
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"log"
 	"math"
 	"reflect"
@@ -1088,6 +1089,23 @@ ip = "10.0.0.2"
 	// Ports: [8001 8002]
 	// Server: beta (ip: 10.0.0.2) in New Jersey created on 1887-01-05
 	// Ports: [9001 9002]
+}
+
+func TestTimeDuration(t *testing.T) {
+	type song struct {
+		Name     string
+		Duration time.Duration
+	}
+	blob := `
+name = "Thunder Road"
+duration = "1m"
+`
+	var s song
+
+	_, err := Decode(blob, &s)
+
+	assert.Nil(t, err)
+	assert.Equal(t, song{Name: "Thunder Road", Duration: time.Minute}, s)
 }
 
 type duration struct {

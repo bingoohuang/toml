@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"unicode"
 )
 
 func e(format string, args ...interface{}) error {
@@ -143,6 +144,10 @@ func DecodeReader(r io.Reader, v interface{}) (MetaData, error) {
 	return Decode(string(bs), v)
 }
 
+var (
+	timeDuration = reflect.TypeOf(time.Duration(0))
+)
+
 // unify performs a sort of type unification based on the structure of `rv`,
 // which is the client representation.
 //
@@ -194,6 +199,10 @@ func (md *MetaData) unify(data interface{}, rv reflect.Value) error {
 
 	// laziness
 	if k >= reflect.Int && k <= reflect.Uint64 {
+		if rv.Type() == timeDuration {
+			return md.unifyDuration(data, rv)
+		}
+
 		return md.unifyInt(data, rv)
 	}
 	switch k {
@@ -361,6 +370,43 @@ func (md *MetaData) unifyString(data interface{}, rv reflect.Value) error {
 		rv.SetString(s)
 		return nil
 	}
+	return badtype("string", data)
+}
+
+// ParseDurationE ...
+func ParseDurationE(s string) (time.Duration, error) {
+	return time.ParseDuration(StripSpaces(s))
+}
+
+// StripSpaces strips all spaces from the string.
+func StripSpaces(str string) string {
+	var b strings.Builder
+
+	b.Grow(len(str))
+
+	for _, ch := range str {
+		if !unicode.IsSpace(ch) {
+			b.WriteRune(ch)
+		}
+	}
+
+	return b.String()
+}
+
+func (md *MetaData) unifyDuration(data interface{}, rv reflect.Value) error {
+	if s, ok := data.(string); ok {
+		if s == "" {
+			return nil
+		}
+
+		d, err := ParseDurationE(s)
+		if err != nil {
+			return err
+		}
+		rv.Set(reflect.ValueOf(d))
+		return nil
+	}
+
 	return badtype("string", data)
 }
 
