@@ -175,14 +175,6 @@ func (md *MetaData) unify(data interface{}, rv reflect.Value) error {
 		}
 	}
 
-	// Special case. Handle time.Time values specifically.
-	// TODO: Remove this code when we decide to drop support for Go 1.1.
-	// This isn't necessary in Go 1.2 because time.Time satisfies the encoding
-	// interfaces.
-	if rv.Type().AssignableTo(rvalue(time.Time{}).Type()) {
-		return md.unifyDatetime(data, rv)
-	}
-
 	// Special case. Look for a value satisfying the TextUnmarshaler interface.
 	if v, ok := rv.Interface().(TextUnmarshaler); ok {
 		return md.unifyText(data, v)
@@ -335,8 +327,20 @@ func (md *MetaData) unifySlice(data interface{}, rv reflect.Value) error {
 		if !datav.IsValid() {
 			return nil
 		}
-		return badtype("slice", data)
+
+		switch datav.Kind() {
+		case reflect.Bool,
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+			reflect.String:
+			dataSlice := reflect.MakeSlice(reflect.SliceOf(datav.Type()), 0, 1)
+			datav = reflect.Append(dataSlice, datav)
+		default:
+			return badtype("slice", data)
+		}
 	}
+
 	n := datav.Len()
 	if rv.IsNil() || rv.Cap() < n {
 		rv.Set(reflect.MakeSlice(rv.Type(), n, n))

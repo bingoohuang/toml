@@ -11,6 +11,39 @@ import (
 	"time"
 )
 
+func TestDecodeSingleString(t *testing.T) {
+	var testSimple = `
+age = 250
+andrew = "gallant"
+`
+	type simple1 struct {
+		Age    int
+		Andrew string
+	}
+
+	var val simple1
+	_, err := Decode(testSimple, &val)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "gallant", val.Andrew)
+
+	type simple2 struct {
+		Age    int
+		Andrew []string
+	}
+
+	var val2 simple2
+	_, err = Decode(testSimple, &val2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 1, len(val2.Andrew))
+	assert.Equal(t, []string{"gallant"}, val2.Andrew)
+}
+
 func TestDecodeSimple(t *testing.T) {
 	var testSimple = `
 age = 250
