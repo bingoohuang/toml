@@ -11,6 +11,8 @@ type MetaData struct {
 	keys    []Key
 	decoded map[string]bool
 	context Key // Used only during decoding.
+
+	options DecodeOptions
 }
 
 // IsDefined returns true if the key given exists in the TOML data. The key

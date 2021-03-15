@@ -69,6 +69,56 @@ func (md *MetaData) PrimitiveDecode(primValue Primitive, v interface{}) error {
 	return md.unify(primValue.undecoded, rvalue(v))
 }
 
+type DecodeOptions struct {
+	PrefixMap map[string]string
+}
+
+func (o DecodeOptions) KeyEquals(tomlKey string, fieldName string) bool {
+	uf := strings.ToLower(fieldName)
+	if p, ok := o.PrefixMap[uf]; ok && p != "" {
+		return p+"-"+uf == tomlKey
+	}
+
+	return tomlKey == fieldName
+}
+
+func (o DecodeOptions) EqualFold(tomlKey string, fieldName string) bool {
+	uf := strings.ToLower(fieldName)
+	if p, ok := o.PrefixMap[uf]; ok && p != "" {
+		return strings.EqualFold(p+"-"+uf, tomlKey)
+	}
+
+	return strings.EqualFold(fieldName, tomlKey)
+}
+
+type DecodeOptionsFn func(options *DecodeOptions)
+type DecodeOptionsFns []DecodeOptionsFn
+
+func WithPrefixMap(v map[string]string) DecodeOptionsFn {
+	return func(options *DecodeOptions) {
+		options.PrefixMap = lowerKeyValue(v)
+	}
+}
+
+func lowerKeyValue(m map[string]string) map[string]string {
+	out := make(map[string]string)
+
+	for k, v := range m {
+		out[strings.ToLower(k)] = strings.ToLower(v)
+	}
+
+	return out
+}
+
+func (f DecodeOptionsFns) CreateOptions() DecodeOptions {
+	o := DecodeOptions{}
+	for _, i := range f {
+		i(&o)
+	}
+
+	return o
+}
+
 // Decode will decode the contents of `data` in TOML format into a pointer
 // `v`.
 //
@@ -105,7 +155,7 @@ func (md *MetaData) PrimitiveDecode(primValue Primitive, v interface{}) error {
 //
 // This decoder will not handle cyclic types. If a cyclic type is passed,
 // `Decode` will not terminate.
-func Decode(data string, v interface{}) (MetaData, error) {
+func Decode(data string, v interface{}, options ...DecodeOptionsFn) (MetaData, error) {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr {
 		return MetaData{}, e("Decode of non-pointer %s", reflect.TypeOf(v))
@@ -118,8 +168,9 @@ func Decode(data string, v interface{}) (MetaData, error) {
 		return MetaData{}, err
 	}
 	md := MetaData{
-		p.mapping, p.types, p.ordered,
-		make(map[string]bool, len(p.ordered)), nil,
+		mapping: p.mapping, types: p.types, keys: p.ordered,
+		decoded: make(map[string]bool, len(p.ordered)),
+		options: DecodeOptionsFns(options).CreateOptions(),
 	}
 	return md, md.unify(p.mapping, indirect(rv))
 }
@@ -232,6 +283,24 @@ func (md *MetaData) unify(data interface{}, rv reflect.Value) error {
 	return e("unsupported type %s", rv.Kind())
 }
 
+func (md *MetaData) searchStructField(tomlKey string, rv reflect.Value) *field {
+	var f *field
+	fields := cachedTypeFields(rv.Type())
+	for i := range fields {
+		ff := &fields[i]
+
+		if md.options.KeyEquals(tomlKey, ff.name) {
+			return ff
+		}
+
+		if f == nil && md.options.EqualFold(tomlKey, ff.name) {
+			f = ff
+		}
+	}
+
+	return f
+}
+
 func (md *MetaData) unifyStruct(mapping interface{}, rv reflect.Value) error {
 	tmap, ok := mapping.(map[string]interface{})
 	if !ok {
@@ -243,18 +312,7 @@ func (md *MetaData) unifyStruct(mapping interface{}, rv reflect.Value) error {
 	}
 
 	for key, datum := range tmap {
-		var f *field
-		fields := cachedTypeFields(rv.Type())
-		for i := range fields {
-			ff := &fields[i]
-			if ff.name == key {
-				f = ff
-				break
-			}
-			if f == nil && strings.EqualFold(ff.name, key) {
-				f = ff
-			}
-		}
+		var f = md.searchStructField(key, rv)
 		if f != nil {
 			subv := rv
 			for _, i := range f.index {

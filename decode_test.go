@@ -11,6 +11,42 @@ import (
 	"time"
 )
 
+func TestDecodePrefixString(t *testing.T) {
+	var testSimple = `
+age = 250
+foo-age = 350
+bar-age = 450
+andrew = "gallant"
+`
+	type simple1 struct {
+		Age    int
+		Andrew string
+	}
+
+	var val simple1
+	_, err := Decode(testSimple, &val, WithPrefixMap(map[string]string{"age": "foo"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 350, val.Age)
+
+	_, err = Decode(testSimple, &val, WithPrefixMap(map[string]string{"age": "bar"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 450, val.Age)
+
+	_, err = Decode(testSimple, &val)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 250, val.Age)
+
+}
+
 func TestDecodeSingleString(t *testing.T) {
 	var testSimple = `
 age = 250
