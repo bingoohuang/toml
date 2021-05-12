@@ -71,12 +71,16 @@ func (md *MetaData) PrimitiveDecode(primValue Primitive, v interface{}) error {
 
 type DecodeOptions struct {
 	PrefixMap map[string]string
+	SuffixMap map[string]string
 }
 
 func (o DecodeOptions) KeyEquals(tomlKey string, fieldName string) bool {
 	uf := strings.ToLower(fieldName)
 	if p, ok := o.PrefixMap[uf]; ok && p != "" {
 		return p+"-"+uf == tomlKey
+	}
+	if p, ok := o.SuffixMap[uf]; ok && p != "" {
+		return uf+"-"+p == tomlKey
 	}
 
 	return tomlKey == fieldName
@@ -87,7 +91,9 @@ func (o DecodeOptions) EqualFold(tomlKey string, fieldName string) bool {
 	if p, ok := o.PrefixMap[uf]; ok && p != "" {
 		return strings.EqualFold(p+"-"+uf, tomlKey)
 	}
-
+	if p, ok := o.SuffixMap[uf]; ok && p != "" {
+		return strings.EqualFold(uf+"-"+p, tomlKey)
+	}
 	return strings.EqualFold(fieldName, tomlKey)
 }
 
@@ -97,6 +103,12 @@ type DecodeOptionsFns []DecodeOptionsFn
 func WithPrefixMap(v map[string]string) DecodeOptionsFn {
 	return func(options *DecodeOptions) {
 		options.PrefixMap = lowerKeyValue(v)
+	}
+}
+
+func WithSuffixMap(v map[string]string) DecodeOptionsFn {
+	return func(options *DecodeOptions) {
+		options.SuffixMap = lowerKeyValue(v)
 	}
 }
 
